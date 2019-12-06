@@ -1,0 +1,189 @@
+---
+title: "MCMC Simulation for Poisson-gamma Hierarchical Model"
+author: "Seth Temple"
+date: "December 5, 2019"
+output: html_document
+---
+
+p(a, b, theta | y) in Poisson-gamma hierarchical model
+```{r}
+# target density
+adensity <- function(a, b, theta){
+  return(prod(dgamma(theta, shape = a, rate = b)) *
+           dexp(a, rate = 1))
+}
+
+# Metropolis-Hastings algorithm
+ametrohast <- function(a, b, theta){
+  stop = F
+  while(stop != T){
+    A <- rexp(1, rate = 1 / a) # proposal density is exponential
+    dA <- dexp(A, rate = 1 / a)
+    da <- dexp(a, rate = 1 / A)
+    accept_rt <- min(1, (adensity(A, b, theta) * da) / (adensity(a, b, theta) * dA))
+    u <- runif(1)
+    if(u <= accept_rt){
+      stop = T
+    }
+  }
+  return(A)
+}
+```
+
+Note: I set a seed that works with my MCMC setup. For my setup, sometimes the chunk throws an error. I suspect this is due to the algorithm exploring a value so small or so large that R defaults to NA and then the acceptance logic fails. Just keep running the chunk. It often works in less than 5 attempts. The trace plots and consistency of simulations suggest correctness.
+```{r}
+set.seed(112719) # Thanksgiving
+
+# simulation parameters
+runs <- 2000
+burns <- 10
+
+# first random initialization
+a1 <- rexp(1, rate = 1)
+b1 <- rgamma(1, shape = .1, rate = 1)
+theta1 <- rgamma(10, shape = a1, rate = b1)
+
+# second random initialization
+a2 <- rexp(1, rate = 1)
+b2 <- rgamma(1, shape = .1, rate = 1)
+theta2 <- rgamma(10, shape = a2, rate = b2)
+
+# data
+y <- c(5, 1, 5, 14, 3, 19, 1, 1, 4, 22)
+t <- c(94.3, 15.7, 62.9, 126, 5.24, 31.4,
+       1.05, 1.05, 2.1, 10.5)
+
+# gibbs sampling
+alpha1 <- rep(0, times = runs)
+beta1 <- rep(0, times = runs)
+for(i in 1:runs){
+    a1 <- ametrohast(a1, b1, theta1)
+    b1 <- rgamma(1, shape = 10 * a1 + .1, rate = sum(theta1) + 1)
+    theta1 <- rgamma(10, shape = y + a1, rate = t + b1)
+    alpha1[i] <- a1
+    beta1[i] <- b1
+}
+
+alpha2 <- rep(0, times = runs)
+beta2 <- rep(0, times = runs)
+for(i in 1:runs){
+    a2 <- ametrohast(a2, b2, theta2)
+    b2 <- rgamma(1, shape = 10 * a2 + .1, rate = sum(theta2) + 1)
+    theta2 <- rgamma(10, shape = y + a2, rate = t + b2)
+    alpha2[i] <- a2
+    beta2[i] <- b2
+}
+```
+
+I experimented with the burn parameter. The MCMC simulation converges quickly, so I chose not to burn too many samples. The trace plots from two random initializations show similar results, suggesting that the MCMC simulation is not overly sensitive to the initialization parameters.
+```{r}
+plot(alpha1[burns:runs], type = 'l',
+     main = 'MCMC Trace Plot', ylab = 'Alpha')
+lines(alpha2[burns:runs], type = 'l', col = 'blue')
+
+plot(beta1[burns:runs], type = 'l',
+     main = 'MCMC Trace Plot', ylab = 'Beta')
+lines(beta2[burns:runs], type = 'l', col = 'blue')
+```
+
+We show the scatterplot from the first MCMC simulation.
+```{r}
+# with points
+plot(alpha1[burns:runs], beta1[burns:runs],
+     type = 'p', pch = 20, main = 'Poisson-Gamma MCMC Simulation',
+     xlim = c(0, 4), xlab = 'Alpha',
+     ylim = c(0, 4), ylab = 'Beta')
+
+# with lines
+plot(alpha1[burns:runs], beta1[burns:runs],
+     type = 'l', main = 'Poisson-Gamma MCMC Simulation',
+     xlim = c(0, 4), xlab = 'Alpha',
+     ylim = c(0, 4), ylab = 'Beta')
+```
+
+p(a, b, | y) in Poisson-gamma hierarchical model
+```{r}
+nbdensity <- function(a, b, t, y){
+  return(prod(dnbinom(y, size = a, prob = (t / (b + t)))) *
+           dexp(a, 1) * dgamma(b, shape = .1, rate = 1))
+}
+
+nbmetrohast <- function(a, b, t, y){
+  stop = F
+  while(stop != T){
+      A <- rgamma(1, shape = a, rate = 1) # ind proposal density
+      B <- rgamma(1, shape = b, rate = 1) # ind proposal density
+      dA <- dgamma(A, shape = a, rate = 1)
+      dB <- dgamma(B, shape = b, rate = 1)
+      da <- dgamma(a, shape = A, rate = 1)
+      db <- dgamma(b, shape = B, rate = 1)
+      accept_rt <- min(1, (nbdensity(A, B, t, y) * da * db) / 
+                         (nbdensity(a, b, t, y) * dA * dB))
+      u <- runif(1)
+      if(u <= accept_rt){
+        stop = T
+      }
+  }
+  return(c(A, B))
+}
+```
+
+```{r}
+set.seed(122519) # Christmas
+
+# simulation parameters
+runs <- 2000
+burns <- 10
+
+# first random initialization
+a1 <- rexp(1, rate = 1)
+b1 <- rgamma(1, shape = .1, rate = 1)
+
+# second random initialization
+a2 <- rexp(1, rate = 1)
+b2 <- rgamma(1, shape = .1, rate = 1)
+
+# gibbs sampling
+alpha1 <- rep(0, times = runs)
+beta1 <- rep(0, times = runs)
+for(i in 1:runs){
+    ab <- nbmetrohast(a1, b1, t, y)
+    a1 <- ab[1]
+    b1 <- ab[2]
+    alpha1[i] <- a1
+    beta1[i] <- b1
+}
+
+alpha2 <- rep(0, times = runs)
+beta2 <- rep(0, times = runs)
+for(i in 1:runs){
+    ab <- nbmetrohast(a2, b2, t, y)
+    a2 <- ab[1]
+    b2 <- ab[2]
+    alpha2[i] <- a2
+    beta2[i] <- b2
+}
+```
+
+```{r}
+plot(alpha1[burns:runs], type = 'l',
+     main = 'MCMC Trace Plot', ylab = 'Alpha')
+lines(alpha2[burns:runs], type = 'l', col = 'blue')
+
+plot(beta1[burns:runs], type = 'l',
+     main = 'MCMC Trace Plot', ylab = 'Beta')
+lines(beta2[burns:runs], type = 'l', col = 'blue')
+```
+
+```{r}
+# with points
+plot(alpha1[burns:runs], beta1[burns:runs],
+     type = 'p', pch = 20, main = 'Poisson-Gamma MCMC Simulation',
+     xlab = 'Alpha', ylab = 'Beta')
+
+# with lines
+plot(alpha1[burns:runs], beta1[burns:runs],
+     type = 'l', main = 'Poisson-Gamma MCMC Simulation',
+     xlab = 'Alpha',
+     ylab = 'Beta')
+```
