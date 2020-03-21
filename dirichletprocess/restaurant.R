@@ -1,5 +1,5 @@
 # Chinese restaurant process ----------------------------------------------
-restaurant <- function(n = 2, theta, alpha){
+rrestaurant <- function(n = 2, theta, alpha){
   if(alpha > 1){
     stop("invalid inputs")
   }
@@ -22,7 +22,7 @@ restaurant <- function(n = 2, theta, alpha){
     j <- 1
     while((u > x) & (j != (l + 1))){
       x <- x + 
-            (theta + length(sample[[as.character(j)]]) * alpha) / 
+            (length(sample[[as.character(j)]]) - alpha) / 
             (n + theta)
       j <- j + 1
     }
